@@ -1,0 +1,53 @@
+# 应用
+APP:
+  NAME: "codo-kubernetes"
+  ENV: "PRD"
+  ADDR: "0.0.0.0:8000"
+  TIMEOUT: 1s
+  PROTOCOL: "HTTP"
+  VERSION: "v1.0.0"
+
+# 可观测
+OTEL:
+  TRACE:
+    ENDPOINT: "http://jaeger-xingyun-collector.tracing.svc.cluster.local:14268/api/traces"
+    INSECURE: TRUE
+  METRIC:
+    ENABLE_EXEMPLAR: TRUE
+  LOG:
+    LEVEL: DEBUG
+
+# Prometheus
+PROMETHEUS:
+  ENABLED: true
+  NETWORK: "tcp"
+  ADDR: "0.0.0.0:9091"
+  PATH: "/metrics"
+
+# 火焰图
+PPROF:
+  ENABLE: true
+  NETWORK: "tcp"
+  ADDR: "0.0.0.0:6060"
+
+# 数据库
+DB:
+  DB_TYPE: "mysql"
+  DB_USER: "root"
+  DB_PASSWORD: "root"
+  DB_HOST: "192.168.15.168"
+  DB_NAME: "codo_kubernetes"
+  DB_TABLE_PREFIX: ""
+  DB_FILE: ""
+  DB_PORT: "30306"
+  DB_MaxIdleConns: 10
+  DB_MaxOpenConns: 10
+  DB_ConnMaxLifetime: 600s
+  DEBUG: true
+
+# Redis
+REDIS:
+  R_HOST: 127.0.0.1
+  R_PORT: 6379
+  R_PASSWORD: "redis"
+  R_DB: 1

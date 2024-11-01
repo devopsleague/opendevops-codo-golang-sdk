@@ -1,0 +1,76 @@
+run:
+  timeout: 5m
+  tests: false
+  skip-dirs:
+    - .go
+  skip-dirs-use-default: false
+# issues:
+#   exclude-use-default: false
+linters-settings:
+  nakedret:
+    max-func-lines: 0
+  funlen:
+    lines: 300
+    statements: 150
+    ignore-comments: true
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+  gocyclo:
+    min-complexity: 30
+  revive:
+    ignore-generated-header: true
+    severity: error
+    rules:
+      - name: var-naming
+        disabled: true
+      - name: exported
+        disabled: true
+        metadata: disable-name
+        ignore: ["struct"]
+        arguments:
+          - "disableStutteringCheck"
+          - "sayRepetitiveInsteadOfStutters"
+      - name: function-result-limit
+        severity: warning
+        disabled: false
+        arguments: [3]
+  lll:
+    line-length: 200
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false # report any unused nolint directives
+    require-explanation: false # don't require an explanation for nolint directives
+    require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+linters: # https://golangci-lint.run/usage/linters/
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - errcheck
+    - exportloopref
+    - funlen
+    - goconst
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+    - goimports
+    # - gomnd
+    # - contextcheck
+    - containedctx
+    - revive
