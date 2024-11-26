@@ -1,6 +1,6 @@
 module github.com/opendevops-cn/codo-golang-sdk
 
-go 1.22.5
+go 1.23.3
 
 require (
 	github.com/XSAM/otelsql v0.32.0
@@ -38,6 +38,7 @@ require (
 	github.com/satori/go.uuid v1.2.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect

@@ -128,17 +128,19 @@ func LoadYaml(filepath string, conf interface{}) error {
 
 // LoadEnv 解析环境变量到结构体
 func LoadEnv(prefix string, v interface{}) error {
-	return parseEnv(prefix, reflect.ValueOf(v))
+	_, err := parseEnv(prefix, reflect.ValueOf(v))
+	return err
 }
 
-func parseEnv(prefix string, v reflect.Value) error {
+func parseEnv(prefix string, v reflect.Value) (bool, error) {
 	if v.Kind() != reflect.Ptr || v.IsNil() {
-		return fmt.Errorf("invalid value: must be a non-nil pointer")
+		return false, fmt.Errorf("invalid value: must be a non-nil pointer")
 	}
 
 	v = v.Elem()
 	t := v.Type()
 
+	var isSetFields bool
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
@@ -166,46 +168,71 @@ func parseEnv(prefix string, v reflect.Value) error {
 			envKey = envKeyPrefix
 		}
 
+		var valueElement = value
 		if value.Kind() == reflect.Pointer && value.CanSet() {
 			if value.IsNil() {
-				value.Set(reflect.New(value.Type().Elem()))
+				valueElement = reflect.New(value.Type().Elem()).Elem()
+			} else {
+				valueElement = value.Elem()
 			}
-			value = value.Elem()
 		}
 
-		switch value.Kind() {
+		switch valueElement.Kind() {
 		case reflect.Struct:
-			if err := parseEnv(envKeyPrefix, value.Addr()); err != nil {
-				return err
+			ok, err := parseEnv(envKeyPrefix, valueElement.Addr())
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				if value.Kind() == reflect.Pointer && value.CanSet() {
+					value.Set(valueElement.Addr())
+				} else {
+					value.Set(valueElement)
+				}
+				isSetFields = true
 			}
 		case reflect.Slice:
-			if err := setSliceField(value, envKey); err != nil {
-				return err
+			if err := setSliceField(valueElement, envKey); err != nil {
+				return false, err
 			}
 		default:
-			if err := setField(value, envKey); err != nil {
-				return err
+			ok, err := setField(valueElement, envKey)
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				isSetFields = true
 			}
 		}
 	}
 
-	return nil
+	return isSetFields, nil
 }
 
 func LoadFlag(flagSet *flag.FlagSet, args []string, conf interface{}) error {
-	v := reflect.ValueOf(conf).Elem()
-	parseFlagStruct(flagSet, v)
+	err := parseFlagStruct(flagSet, reflect.ValueOf(conf))
+	if err != nil {
+		return err
+	}
 	return flagSet.Parse(args)
 }
 
-func parseFlagStruct(flagSet *flag.FlagSet, v reflect.Value) {
+func parseFlagStruct(flagSet *flag.FlagSet, v reflect.Value) error {
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return fmt.Errorf("invalid value: must be a non-nil pointer, current=%s", v.Kind())
+	}
+	v = v.Elem()
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
 
+		valueElement := fieldValue
 		if field.Type.Kind() == reflect.Struct {
-			parseFlagStruct(flagSet, fieldValue)
+			err := parseFlagStruct(flagSet, valueElement.Addr())
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -306,28 +333,41 @@ func parseFlagStruct(flagSet *flag.FlagSet, v reflect.Value) {
 				ptr := fieldValue.Addr().Interface().(*[]bool)
 				flagSet.Var((*sliceValue[bool])(ptr), flagName, usage)
 			default:
-				log.Println("unsupported slice type === ", fieldValue.Type().Elem().Kind())
+				return fmt.Errorf("unsupported slice type === %s", fieldValue.Type().Elem().Kind())
 			}
 		default:
-			log.Println("unsupported type === ", fieldValue.Kind())
+			return fmt.Errorf("unsupported type === %s", fieldValue.Kind())
 		}
 	}
+
+	return nil
 }
 
 func LoadPFlag(flagSet *pflag.FlagSet, args []string, conf interface{}) error {
-	v := reflect.ValueOf(conf).Elem()
-	parsePFlagStruct(flagSet, v)
+	err := parsePFlagStruct(flagSet, reflect.ValueOf(conf))
+	if err != nil {
+		return err
+	}
 	return flagSet.Parse(args)
 }
 
-func parsePFlagStruct(flagSet *pflag.FlagSet, v reflect.Value) {
+func parsePFlagStruct(flagSet *pflag.FlagSet, v reflect.Value) error {
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return fmt.Errorf("invalid value: must be a non-nil pointer, current=%s", v.Kind())
+	}
+	v = v.Elem()
 	t := v.Type()
+
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
 
+		valueElement := fieldValue
 		if field.Type.Kind() == reflect.Struct {
-			parsePFlagStruct(flagSet, fieldValue)
+			err := parsePFlagStruct(flagSet, valueElement.Addr())
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -428,12 +468,14 @@ func parsePFlagStruct(flagSet *pflag.FlagSet, v reflect.Value) {
 				ptr := fieldValue.Addr().Interface().(*[]bool)
 				flagSet.VarP((*sliceValue[bool])(ptr), flagName, flagShot, usage)
 			default:
-				log.Println("unsupported slice type === ", fieldValue.Type().Elem().Kind())
+				return fmt.Errorf("unsupported slice type === %s", fieldValue.Type().Elem().Kind())
 			}
 		default:
-			log.Println("unsupported type === ", fieldValue.Kind())
+			return fmt.Errorf("unsupported type === %s", fieldValue.Kind())
 		}
 	}
+
+	return nil
 }
 
 type valueRange interface {
@@ -560,10 +602,10 @@ func (x *sliceValue[T]) Set(value string) error {
 	return nil
 }
 
-func setField(value reflect.Value, envKey string) error {
+func setField(value reflect.Value, envKey string) (bool, error) {
 	envValue := os.Getenv(envKey)
 	if envValue == "" {
-		return nil
+		return false, nil
 	}
 
 	switch value.Kind() {
@@ -572,32 +614,32 @@ func setField(value reflect.Value, envKey string) error {
 	case reflect.Float64, reflect.Float32:
 		floatValue, err := strconv.ParseFloat(envValue, 64)
 		if err != nil {
-			return fmt.Errorf("invalid float value for %s: %s", envKey, envValue)
+			return false, fmt.Errorf("invalid float value for %s: %s", envKey, envValue)
 		}
 		value.SetFloat(floatValue)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i64, err := strconv.ParseInt(envValue, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid integer value for %s: %s", envKey, envValue)
+			return false, fmt.Errorf("invalid integer value for %s: %s", envKey, envValue)
 		}
 		value.SetInt(i64)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		u64, err := strconv.ParseUint(envValue, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid unsigned integer value for %s: %s", envKey, envValue)
+			return false, fmt.Errorf("invalid unsigned integer value for %s: %s", envKey, envValue)
 		}
 		value.SetUint(u64)
 	case reflect.Bool:
 		boolValue, err := strconv.ParseBool(envValue)
 		if err != nil {
-			return fmt.Errorf("invalid boolean value for %s: %s", envKey, envValue)
+			return false, fmt.Errorf("invalid boolean value for %s: %s", envKey, envValue)
 		}
 		value.SetBool(boolValue)
 	default:
-		return fmt.Errorf("unsupported type for %s", envKey)
+		return false, fmt.Errorf("unsupported type for %s, %s", envKey, value.Type())
 	}
 
-	return nil
+	return true, nil
 }
 
 func setSliceField(value reflect.Value, envKey string) error {

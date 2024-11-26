@@ -12,6 +12,10 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
+	type subConfig struct {
+		SubHost string `json:"sub_host"`
+	}
+
 	type testConfig struct {
 		Host          string  `json:"host" env:"HOST"`
 		NoEnv         uint32  `json:"noEnv"`
@@ -19,8 +23,9 @@ func TestLoadConfig(t *testing.T) {
 		OnlyNameSlice []float32
 		Bool          bool
 
-		TestFlag  uint   `flag:"test-flag|t" usage:"测试 flag 使用"`
-		TestFlags []bool `flag:"test-bools" usage:"测试 flag 数组"`
+		TestFlag  uint       `flag:"test-flag|t" usage:"测试 flag 使用"`
+		TestFlags []bool     `flag:"test-bools" usage:"测试 flag 数组"`
+		SubConfig *subConfig `json:"sub_config"`
 	}
 
 	var dst testConfig
@@ -30,6 +35,7 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv("TEST_IN_JSON", "123.456")
 	os.Setenv("TEST_ONLYNAMESLICE", "123.456,1.1,2.2")
 	os.Setenv("TEST_BOOL", "true")
+	os.Setenv("TEST2_SUB_CONFIG_SUB_HOST", "abc")
 
 	type args struct {
 		dst  interface{}
@@ -78,6 +84,26 @@ func TestLoadConfig(t *testing.T) {
 				TestFlags:     []bool{true, false, true, false},
 			},
 		},
+		{
+			name: "3",
+			args: args{
+				dst: &dst,
+				opts: []ConfigOption{
+					WithEnv("TEST2"),
+					WithPFlag(pflag.NewFlagSet("ptest", pflag.ExitOnError), []string{"-t=3", "--test-bools=true,false,1,0"}),
+				},
+			},
+			want: &testConfig{
+				Host:          "",
+				NoEnv:         456,
+				InJSON:        123.456,
+				OnlyNameSlice: []float32{123.456, 1.1, 2.2},
+				Bool:          true,
+				TestFlag:      3,
+				TestFlags:     []bool{true, false, true, false},
+				SubConfig:     &subConfig{SubHost: "abc"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -86,7 +112,7 @@ func TestLoadConfig(t *testing.T) {
 				panic(err)
 			}
 			if !reflect.DeepEqual(tt.args.dst, tt.want) {
-				t.Errorf("%+v\n", tt.args.dst)
+				t.Errorf("dst====%+v\nwant====%+v", tt.args.dst, tt.want)
 				return
 			}
 			t.Logf("test config === %+v\n", tt.args.dst)
