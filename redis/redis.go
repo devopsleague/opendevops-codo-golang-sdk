@@ -40,7 +40,7 @@ func defaultRedisConfig() RedisConfig {
 		return str
 	}
 	host := emptyOr(os.Getenv("DEFAULT_REDIS_HOST"), "127.0.0.1")
-	port := emptyOr(os.Getenv("DEFAULT_REDIS_PORT"), "3306")
+	port := emptyOr(os.Getenv("DEFAULT_REDIS_PORT"), "6379")
 	pass := emptyOr(os.Getenv("DEFAULT_REDIS_PASS"), "123456")
 	dialTimeout := emptyOr(os.Getenv("DEFAULT_REDIS_DIAL_TIMEOUT"), "10")
 	readTimeout := emptyOr(os.Getenv("DEFAULT_REDIS_READ_TIMEOUT"), "10")
