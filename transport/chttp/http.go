@@ -7,26 +7,39 @@ import (
 	"io"
 	nethttp "net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/opendevops-cn/codo-golang-sdk/cerr"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
+type options struct {
+	propagator propagation.TextMapPropagator
+}
+
+var optionsDefault = options{
+	propagator: propagation.NewCompositeTextMapPropagator(propagation.Baggage{}, propagation.TraceContext{}),
+}
+
 type Resp struct {
 	// 业务 code
 	Code cerr.ErrCode `json:"code"`
-	// 开发看
-	Msg string `json:"msg"`
 	// 用户看
+	Msg string `json:"msg"`
+	// 开发看
 	Reason string `json:"reason"`
-	// 服务器时间戳
-	Timestamp uint32 `json:"timestamp"`
+	// 服务器毫秒时间戳
+	Timestamp string `json:"timestamp"`
 	// 结构化数据
 	Result json.RawMessage `json:"result"`
+	// TraceID
+	TraceID string `json:"trace_id"`
 }
 
 var (
@@ -47,18 +60,36 @@ func ResponseEncoder(writer nethttp.ResponseWriter, request *nethttp.Request, i 
 	if err != nil {
 		return err
 	}
+
+	ctx := optionsDefault.propagator.Extract(request.Context(), propagation.HeaderCarrier(request.Header))
+	sp := trace.SpanContextFromContext(ctx)
+	milliSecondsStr := strconv.Itoa(int(time.Now().UnixMilli()))
+
+	// 写入
+	writer.WriteHeader(nethttp.StatusOK)
 	return json.NewEncoder(writer).Encode(&Resp{
 		Code:      cerr.SCode,
 		Msg:       "success",
-		Timestamp: uint32(time.Now().Unix()),
+		Reason:    "success",
+		Timestamp: milliSecondsStr,
 		Result:    bs,
+		TraceID:   sp.TraceID().String(),
 	})
 }
 
 func RequestBodyDecoder(r *nethttp.Request, i interface{}) error {
+	const megaBytes4 = 4 << 20
+	if r.ContentLength == 0 || r.ContentLength > megaBytes4 {
+		return nil
+	}
+
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		return cerr.New(cerr.EParamUnparsedCode, err)
+	}
+
+	if len(data) == 0 {
+		return nil
 	}
 
 	// reset body.
@@ -68,6 +99,7 @@ func RequestBodyDecoder(r *nethttp.Request, i interface{}) error {
 	if err != nil {
 		return cerr.New(cerr.EParamUnparsedCode, err)
 	}
+
 	return nil
 }
 
@@ -116,13 +148,18 @@ func ErrorEncoder(writer http.ResponseWriter, request *http.Request, err error) 
 	statusCode := codeError.Code.AsHTTPCode()
 	msg := codeError.Code.String()
 
+	ctx := optionsDefault.propagator.Extract(request.Context(), propagation.HeaderCarrier(request.Header))
+	sp := trace.SpanContextFromContext(ctx)
+	milliSecondsStr := strconv.Itoa(int(time.Now().UnixMilli()))
+
 	// 写入
 	writer.WriteHeader(statusCode)
 	_ = json.NewEncoder(writer).Encode(&Resp{
 		Code:      errCode,
 		Msg:       msg,
 		Reason:    err.Error(),
-		Timestamp: uint32(time.Now().Unix()),
+		Timestamp: milliSecondsStr,
+		TraceID:   sp.TraceID().String(),
 	})
 }
 

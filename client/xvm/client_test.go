@@ -46,8 +46,8 @@ func TestVM(t *testing.T) {
 
 	datas := []string{
 		//"server_name",
-		"entity_count{server_name=\"xxxxx\"}",
-		//"online_number",
+		//"entity_count",
+		"online_number",
 		//"lock_entity_status",
 		//"lock_lb_status",
 		//"count(entity_count)",

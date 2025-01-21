@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	http "net/http"
+	"reflect"
 	"strings"
 
 	"github.com/ccheers/xpkg/sync/errgroup"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type WebSocket[T any, R any] struct {
@@ -21,6 +24,7 @@ type Encoding struct {
 	errorEncodeFunc    func(w http.ResponseWriter, err error)
 	requestDecodeFunc  func(r *http.Request, req interface{}) error
 
+	wsReqDecodeFunc      func(bs []byte, req interface{}) error
 	replyEncodeFunc      func(ws *websocket.Conn, resp interface{})
 	replyErrorEncodeFunc func(ws *websocket.Conn, err error)
 }
@@ -53,6 +57,9 @@ func defaultWSOptions() WSOptions {
 			},
 			requestDecodeFunc: func(r *http.Request, req interface{}) error {
 				return json.NewDecoder(r.Body).Decode(req)
+			},
+			wsReqDecodeFunc: func(bs []byte, req interface{}) error {
+				return unmarshalJSON(bs, req)
 			},
 			replyEncodeFunc: func(ws *websocket.Conn, resp interface{}) {
 				_ = ws.WriteJSON(map[string]interface{}{
@@ -96,6 +103,12 @@ func WithErrorEncodeFunc(fn func(w http.ResponseWriter, err error)) WSOptionFunc
 func WithRequestDecodeFunc(fn func(r *http.Request, req interface{}) error) WSOptionFunc {
 	return func(options *WSOptions) {
 		options.encoding.requestDecodeFunc = fn
+	}
+}
+
+func WithWsReqDecodeFunc(fn func(bs []byte, req interface{}) error) WSOptionFunc {
+	return func(options *WSOptions) {
+		options.encoding.wsReqDecodeFunc = fn
 	}
 }
 
@@ -193,7 +206,7 @@ func (x *WebSocket[T, R]) readLoop(ctx context.Context, ws *websocket.Conn) {
 		default:
 		}
 		var dst R
-		err := ws.ReadJSON(&dst)
+		_, bs, err := ws.ReadMessage()
 		if err != nil {
 			if strings.Contains(err.Error(), "connection reset by peer") {
 				return
@@ -201,6 +214,12 @@ func (x *WebSocket[T, R]) readLoop(ctx context.Context, ws *websocket.Conn) {
 			if _, isCloseErr := err.(*websocket.CloseError); isCloseErr {
 				return
 			}
+			continue
+		}
+
+		err = x.options.encoding.wsReqDecodeFunc(bs, &dst)
+		if err != nil {
+			x.options.encoding.replyErrorEncodeFunc(ws, err)
 			continue
 		}
 
@@ -235,5 +254,33 @@ func (x *WebSocket[T, R]) writeLoop(ctx context.Context, ws *websocket.Conn) {
 			continue
 		}
 		x.options.encoding.replyEncodeFunc(ws, resp)
+	}
+}
+
+var (
+	// unmarshalOptions is a configurable JSON format parser.
+	unmarshalOptions = protojson.UnmarshalOptions{
+		DiscardUnknown: true,
+	}
+)
+
+func unmarshalJSON(data []byte, v interface{}) error {
+	switch m := v.(type) {
+	case json.Unmarshaler:
+		return m.UnmarshalJSON(data)
+	case proto.Message:
+		return unmarshalOptions.Unmarshal(data, m)
+	default:
+		rv := reflect.ValueOf(v)
+		for rv := rv; rv.Kind() == reflect.Ptr; {
+			if rv.IsNil() {
+				rv.Set(reflect.New(rv.Type().Elem()))
+			}
+			rv = rv.Elem()
+		}
+		if m, ok := reflect.Indirect(rv).Interface().(proto.Message); ok {
+			return unmarshalOptions.Unmarshal(data, m)
+		}
+		return json.Unmarshal(data, m)
 	}
 }

@@ -72,6 +72,7 @@ func NewRedis(opts ...RedisConfigOption) (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Network:      "tcp",
 		Addr:         addr,
+		Password:     cfg.Pass,
 		DialTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
@@ -104,6 +105,7 @@ func NewRedisV8(opts ...RedisConfigOption) (*redisv8.Client, error) {
 	redisClient := redisv8.NewClient(&redisv8.Options{
 		Network:      "tcp",
 		Addr:         addr,
+		Password:     cfg.Pass,
 		DialTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,

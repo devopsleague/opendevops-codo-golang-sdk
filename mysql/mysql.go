@@ -80,7 +80,7 @@ func NewMysql(opts ...DBConfigOption) (*sql.DB, func(), error) {
 		opt(&cfg)
 	}
 	netAddr := fmt.Sprintf("tcp(%s:%d)", cfg.Host, cfg.Port)
-	dsn := fmt.Sprintf("%s:%s@%s/%s?timeout=30s&charset=utf8mb4", cfg.User, cfg.Pass, netAddr, cfg.DBName)
+	dsn := fmt.Sprintf("%s:%s@%s/%s?loc=Local&charset=utf8mb4&parseTime=True", cfg.User, cfg.Pass, netAddr, cfg.DBName)
 
 	driverName, err := otelsql.Register(
 		"mysql",
@@ -89,6 +89,9 @@ func NewMysql(opts ...DBConfigOption) (*sql.DB, func(), error) {
 			semconv.DBSystemMySQL,
 		),
 		otelsql.WithMeterProvider(cfg.MeterProvider),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{
+			DisableErrSkip: true,
+		}),
 	)
 	if err != nil {
 		return nil, nil, err
