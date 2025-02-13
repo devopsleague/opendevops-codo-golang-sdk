@@ -11,11 +11,11 @@ import (
 
 // Header represents the signing headers used in requests
 type Header struct {
-	AppId   string `json:"idip-sign-appid"`
-	Time    string `json:"idip-sign-time"`
-	Rnd     string `json:"idip-sign-rnd"`
-	Sign    string `json:"idip-sign"`
-	Version string `json:"idip-sign-version"`
+	AppId   string `json:"cbb-sign-appid"`
+	Time    string `json:"cbb-sign-time"`
+	Rnd     string `json:"cbb-sign-rnd"`
+	Sign    string `json:"cbb-sign"`
+	Version string `json:"cbb-sign-version"`
 }
 
 // ISigner defines the interface for signing operations
@@ -78,11 +78,11 @@ func (s Signer) GenSignedHeader(body, tag string, version string) Header {
 // Header2Map converts a Header struct to a map[string]string
 func (h Header) Header2Map() map[string]string {
 	return map[string]string{
-		"idip-sign-appid":   h.AppId,
-		"idip-sign-time":    h.Time,
-		"idip-sign-rnd":     h.Rnd,
-		"idip-sign":         h.Sign,
-		"idip-sign-version": h.Version,
+		"cbb-sign-appid":   h.AppId,
+		"cbb-sign-time":    h.Time,
+		"cbb-sign-rnd":     h.Rnd,
+		"cbb-sign":         h.Sign,
+		"cbb-sign-version": h.Version,
 	}
 }
 
