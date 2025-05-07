@@ -243,4 +243,5 @@ const (
 // codo API auth key
 const (
 	CODOAPIGatewayAuthKeyHeader = "auth_key"
+	CodoAPISuccessCode          = 0
 )
