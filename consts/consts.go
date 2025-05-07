@@ -239,3 +239,8 @@ const (
 	EXEC_NODE_MAP_KEY = "EXEC_NODE_MAP_KEY"
 	AGENT_USED_KEY    = "agent_is_used_map_mark_key"
 )
+
+// codo API auth key
+const (
+	CODOAPIGatewayAuthKeyHeader = "auth_key"
+)
