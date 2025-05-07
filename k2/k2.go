@@ -9,9 +9,11 @@ package k2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/opendevops-cn/codo-golang-sdk/client/xhttp"
 	"github.com/opendevops-cn/codo-golang-sdk/consts"
+	"io"
 	"net/http"
 )
 
@@ -25,6 +27,13 @@ type AuthConfig struct {
 	authKey string
 	client  xhttp.IClient
 	cookies []*http.Cookie
+}
+
+type Response struct {
+	Code   uint32            `json:"code"`
+	Msg    string            `json:"msg"`
+	Reason string            `json:"reason"`
+	Data   map[string]string `json:"data"`
 }
 
 func NewNoAuthConfig(url string, client xhttp.IClient) *NoAuthConfig {
@@ -46,22 +55,42 @@ func NewAuthConfig(url, authKey string, client xhttp.IClient) *AuthConfig {
 	}
 }
 
-func (x *NoAuthConfig) GetConfig(ctx context.Context) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", x.url, nil)
+func getConfig(ctx context.Context, client xhttp.IClient, url string, cookies []*http.Cookie) (map[string]string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request err: %w", err)
 	}
-	return x.client.Do(ctx, req)
-}
-
-func (x *AuthConfig) GetConfig(ctx context.Context) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", x.url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request err: %w", err)
-	}
-	// 自动添加统一设置的 Cookie
-	for _, cookie := range x.cookies {
+	for _, cookie := range cookies {
 		req.AddCookie(cookie)
 	}
-	return x.client.Do(ctx, req)
+	resp, err := client.Do(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("do request err: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("response status code %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body err: %w", err)
+	}
+
+	var apiResp Response
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("unmarshal body err: %w", err)
+	}
+	if apiResp.Code != consts.CodoAPISuccessCode {
+		return nil, fmt.Errorf("response code %d", apiResp.Code)
+	}
+	return apiResp.Data, nil
+}
+
+func (x *NoAuthConfig) GetConfig(ctx context.Context) (map[string]string, error) {
+	return getConfig(ctx, x.client, x.url, nil)
+}
+
+func (x *AuthConfig) GetConfig(ctx context.Context) (map[string]string, error) {
+	return getConfig(ctx, x.client, x.url, x.cookies)
 }
